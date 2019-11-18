@@ -50,6 +50,7 @@ type Middleware struct {
 	ClientState       ClientState
 	ClientToken       ClientToken
 	Binding           string
+	RedirectURI       string
 }
 
 var (
@@ -223,6 +224,10 @@ func (m *Middleware) getPossibleRequestIDs(r *http.Request) []string {
 func (m *Middleware) Authorize(w http.ResponseWriter, r *http.Request, assertion *saml.Assertion) {
 
 	redirectURI := "/"
+	if m.RedirectURI != "" {
+		redirectURI = m.RedirectURI
+	}
+
 	if relayState := r.Form.Get("RelayState"); relayState != "" {
 		stateValue := m.ClientState.GetState(r, relayState)
 		if stateValue == "" {

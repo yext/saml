@@ -35,6 +35,7 @@ type Options struct {
 	CookieDomain      string
 	CookieSecure      bool
 	ForceAuthn        bool
+	RedirectURI       string
 }
 
 // New creates a new Middleware
@@ -70,6 +71,7 @@ func New(opts Options) (*Middleware, error) {
 		},
 		AllowIDPInitiated: opts.AllowIDPInitiated,
 		TokenMaxAge:       tokenMaxAge,
+		RedirectURI:       opts.RedirectURI,
 	}
 
 	cookieStore := ClientCookies{
