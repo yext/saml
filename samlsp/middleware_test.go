@@ -20,9 +20,9 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/crewjam/saml"
-	"github.com/crewjam/saml/logger"
-	"github.com/crewjam/saml/testsaml"
+	"github.com/yext/saml"
+	"github.com/yext/saml/logger"
+	"github.com/yext/saml/testsaml"
 )
 
 type MiddlewareTest struct {

@@ -19,8 +19,8 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 	"github.com/russellhaering/goxmldsig/etreeutils"
 
-	"github.com/crewjam/saml/logger"
-	"github.com/crewjam/saml/xmlenc"
+	"github.com/yext/saml/logger"
+	"github.com/yext/saml/xmlenc"
 )
 
 // NameIDFormat is the format of the id
