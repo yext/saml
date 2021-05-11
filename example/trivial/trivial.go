@@ -1,6 +1,10 @@
 package main
 
 import (
+	"context"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -14,7 +18,7 @@ import (
 )
 
 func hello(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello, %s!", samlsp.Token(r.Context()).Attributes.Get("cn"))
+	fmt.Fprintf(w, "Hello, %s!", samlsp.AttributeFromContext(r.Context(), "cn"))
 }
 
 func main() {
@@ -27,22 +31,28 @@ func main() {
 		panic(err) // TODO handle error
 	}
 
-	idpMetadataURL, err := url.Parse("https://www.testshib.org/metadata/testshib-providers.xml")
+	rootURL, _ := url.Parse("http://localhost:8000")
+	idpMetadataURL, _ := url.Parse("https://samltest.id/saml/idp")
+
+	idpMetadata, err := samlsp.FetchMetadata(
+		context.Background(),
+		http.DefaultClient,
+		*idpMetadataURL)
 	if err != nil {
 		panic(err) // TODO handle error
 	}
 
-	rootURL, err := url.Parse("http://localhost:8000")
-	if err != nil {
-		panic(err) // TODO handle error
-	}
-
-	samlSP, _ := samlsp.New(samlsp.Options{
-		IDPMetadataURL: idpMetadataURL,
-		URL:            *rootURL,
-		Key:            keyPair.PrivateKey.(*rsa.PrivateKey),
-		Certificate:    keyPair.Leaf,
+	samlSP, err := samlsp.New(samlsp.Options{
+		URL:         *rootURL,
+		IDPMetadata: idpMetadata,
+		Key:         keyPair.PrivateKey.(*rsa.PrivateKey),
+		Certificate: keyPair.Leaf,
+		SignRequest: true,
 	})
+	if err != nil {
+		panic(err) // TODO handle error
+	}
+
 	app := http.HandlerFunc(hello)
 	http.Handle("/hello", samlSP.RequireAccount(app))
 	http.Handle("/saml/", samlSP)
