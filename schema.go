@@ -1,6 +1,8 @@
 package saml
 
 import (
+	"bytes"
+	"compress/flate"
 	"encoding/xml"
 	"strconv"
 	"time"
@@ -54,7 +56,7 @@ type LogoutRequest struct {
 	NameID       *NameID
 	Signature    *etree.Element
 
-	SessionIndex string `xml:",attr"`
+	SessionIndex *SessionIndex `xml:"SessionIndex"`
 }
 
 // Element returns an etree.Element representing the object in XML form.
@@ -77,8 +79,8 @@ func (r *LogoutRequest) Element() *etree.Element {
 	if r.Signature != nil {
 		el.AddChild(r.Signature)
 	}
-	if r.SessionIndex != "" {
-		el.CreateAttr("SessionIndex", r.SessionIndex)
+	if r.SessionIndex != nil {
+		el.AddChild(r.SessionIndex.Element())
 	}
 	return el
 }
@@ -110,6 +112,43 @@ func (r *LogoutRequest) UnmarshalXML(d *xml.Decoder, start xml.StartElement) err
 	}
 	r.IssueInstant = time.Time(aux.IssueInstant)
 	return nil
+}
+
+// Bytes returns a byte array representation of the LogoutRequest
+func (r *LogoutRequest) Bytes() ([]byte, error) {
+	doc := etree.NewDocument()
+	doc.SetRoot(r.Element())
+
+	buf, err := doc.WriteToBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+// Deflate returns a compressed byte array of the LogoutRequest
+func (r *LogoutRequest) Deflate() ([]byte, error) {
+	buf, err := r.Bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	var b bytes.Buffer
+	writer, err := flate.NewWriter(&b, flate.DefaultCompression)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := writer.Write(buf); err != nil {
+		return nil, err
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
 }
 
 // Element returns an etree.Element representing the object
@@ -622,6 +661,23 @@ func (a *NameID) Element() *etree.Element {
 	return el
 }
 
+// SessionIndex represents the SAML element SessionIndex.
+//
+// See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf §3.7.1
+type SessionIndex struct {
+	Value string `xml:",chardata"`
+}
+
+// Element returns an etree.Element representing the object in XML form.
+func (s *SessionIndex) Element() *etree.Element {
+	el := etree.NewElement("samlp:SessionIndex")
+	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
+	if s.Value != "" {
+		el.SetText(s.Value)
+	}
+	return el
+}
+
 // SubjectConfirmation represents the SAML element SubjectConfirmation.
 //
 // See http://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf §2.4.1.1
@@ -836,7 +892,7 @@ func (a *ProxyRestriction) Element() *etree.Element {
 type AuthnStatement struct {
 	AuthnInstant        time.Time  `xml:",attr"`
 	SessionIndex        string     `xml:",attr"`
-	SessionNotOnOrAfter *time.Time `xml:",attr"`
+	SessionNotOnOrAfter *time.Time `xml:",attr,omitempty"`
 	SubjectLocality     *SubjectLocality
 	AuthnContext        AuthnContext
 }
@@ -847,6 +903,9 @@ func (a *AuthnStatement) Element() *etree.Element {
 	el.CreateAttr("AuthnInstant", a.AuthnInstant.Format(timeFormat))
 	if a.SessionIndex != "" {
 		el.CreateAttr("SessionIndex", a.SessionIndex)
+	}
+	if a.SessionNotOnOrAfter != nil {
+		el.CreateAttr("SessionNotOnOrAfter", a.SessionNotOnOrAfter.Format(timeFormat))
 	}
 	if a.SubjectLocality != nil {
 		el.AddChild(a.SubjectLocality.Element())
@@ -859,11 +918,13 @@ func (a *AuthnStatement) Element() *etree.Element {
 func (a *AuthnStatement) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	type Alias AuthnStatement
 	aux := &struct {
-		AuthnInstant RelaxedTime `xml:",attr"`
+		AuthnInstant        RelaxedTime  `xml:",attr"`
+		SessionNotOnOrAfter *RelaxedTime `xml:",attr,omitempty"`
 		*Alias
 	}{
-		AuthnInstant: RelaxedTime(a.AuthnInstant),
-		Alias:        (*Alias)(a),
+		AuthnInstant:        RelaxedTime(a.AuthnInstant),
+		SessionNotOnOrAfter: (*RelaxedTime)(a.SessionNotOnOrAfter),
+		Alias:               (*Alias)(a),
 	}
 	return e.EncodeElement(aux, start)
 }
@@ -872,7 +933,8 @@ func (a *AuthnStatement) MarshalXML(e *xml.Encoder, start xml.StartElement) erro
 func (a *AuthnStatement) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	type Alias AuthnStatement
 	aux := &struct {
-		AuthnInstant RelaxedTime `xml:",attr"`
+		AuthnInstant        RelaxedTime  `xml:",attr"`
+		SessionNotOnOrAfter *RelaxedTime `xml:",attr,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(a),
@@ -881,6 +943,7 @@ func (a *AuthnStatement) UnmarshalXML(d *xml.Decoder, start xml.StartElement) er
 		return err
 	}
 	a.AuthnInstant = time.Time(aux.AuthnInstant)
+	a.SessionNotOnOrAfter = (*time.Time)(aux.SessionNotOnOrAfter)
 	return nil
 }
 
@@ -1021,7 +1084,7 @@ type LogoutResponse struct {
 
 // Element returns an etree.Element representing the object in XML form.
 func (r *LogoutResponse) Element() *etree.Element {
-	el := etree.NewElement("samlp:Response")
+	el := etree.NewElement("samlp:LogoutResponse")
 	el.CreateAttr("xmlns:saml", "urn:oasis:names:tc:SAML:2.0:assertion")
 	el.CreateAttr("xmlns:samlp", "urn:oasis:names:tc:SAML:2.0:protocol")
 
