@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/beevik/etree"
-	xrv "github.com/mattermost/xml-roundtrip-validator"
 	dsig "github.com/russellhaering/goxmldsig"
 
 	"github.com/yext/saml/logger"
@@ -44,8 +43,6 @@ type Session struct {
 	UserSurname           string
 	UserGivenName         string
 	UserScopedAffiliation string
-
-	CustomAttributes []Attribute
 }
 
 // SessionProvider is an interface used by IdentityProvider to determine the
@@ -281,14 +278,6 @@ func (idp *IdentityProvider) ServeIDPInitiated(w http.ResponseWriter, r *http.Re
 	for _, spssoDescriptor := range req.ServiceProviderMetadata.SPSSODescriptors {
 		for _, endpoint := range spssoDescriptor.AssertionConsumerServices {
 			if endpoint.Binding == HTTPPostBinding {
-				// explicitly copy loop iterator variables
-				//
-				// c.f. https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-				//
-				// (note that I'm pretty sure this isn't strictly necessary because we break out of the loop immediately,
-				// but it certainly doesn't hurt anything and may prevent bugs in the future.)
-				endpoint, spssoDescriptor := endpoint, spssoDescriptor
-
 				req.ACSEndpoint = &endpoint
 				req.SPSSODescriptor = &spssoDescriptor
 				break
@@ -370,7 +359,6 @@ func NewIdpAuthnRequest(idp *IdentityProvider, r *http.Request) (*IdpAuthnReques
 	default:
 		return nil, fmt.Errorf("method not allowed")
 	}
-
 	return req, nil
 }
 
@@ -378,10 +366,6 @@ func NewIdpAuthnRequest(idp *IdentityProvider, r *http.Request) (*IdpAuthnReques
 // the AuthnRequest and Metadata properties. Returns a non-nil error if the
 // request is not valid.
 func (req *IdpAuthnRequest) Validate() error {
-	if err := xrv.Validate(bytes.NewReader(req.RequestBuffer)); err != nil {
-		return err
-	}
-
 	if err := xml.Unmarshal(req.RequestBuffer, &req.Request); err != nil {
 		return err
 	}
@@ -449,14 +433,6 @@ func (req *IdpAuthnRequest) getACSEndpoint() error {
 		for _, spssoDescriptor := range req.ServiceProviderMetadata.SPSSODescriptors {
 			for _, spAssertionConsumerService := range spssoDescriptor.AssertionConsumerServices {
 				if strconv.Itoa(spAssertionConsumerService.Index) == req.Request.AssertionConsumerServiceIndex {
-					// explicitly copy loop iterator variables
-					//
-					// c.f. https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-					//
-					// (note that I'm pretty sure this isn't strictly necessary because we break out of the loop immediately,
-					// but it certainly doesn't hurt anything and may prevent bugs in the future.)
-					spssoDescriptor, spAssertionConsumerService := spssoDescriptor, spAssertionConsumerService
-
 					req.SPSSODescriptor = &spssoDescriptor
 					req.ACSEndpoint = &spAssertionConsumerService
 					return nil
@@ -469,14 +445,6 @@ func (req *IdpAuthnRequest) getACSEndpoint() error {
 		for _, spssoDescriptor := range req.ServiceProviderMetadata.SPSSODescriptors {
 			for _, spAssertionConsumerService := range spssoDescriptor.AssertionConsumerServices {
 				if spAssertionConsumerService.Location == req.Request.AssertionConsumerServiceURL {
-					// explicitly copy loop iterator variables
-					//
-					// c.f. https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-					//
-					// (note that I'm pretty sure this isn't strictly necessary because we break out of the loop immediately,
-					// but it certainly doesn't hurt anything and may prevent bugs in the future.)
-					spssoDescriptor, spAssertionConsumerService := spssoDescriptor, spAssertionConsumerService
-
 					req.SPSSODescriptor = &spssoDescriptor
 					req.ACSEndpoint = &spAssertionConsumerService
 					return nil
@@ -494,14 +462,6 @@ func (req *IdpAuthnRequest) getACSEndpoint() error {
 				if spAssertionConsumerService.IsDefault != nil && *spAssertionConsumerService.IsDefault {
 					switch spAssertionConsumerService.Binding {
 					case HTTPPostBinding, HTTPRedirectBinding:
-						// explicitly copy loop iterator variables
-						//
-						// c.f. https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-						//
-						// (note that I'm pretty sure this isn't strictly necessary because we break out of the loop immediately,
-						// but it certainly doesn't hurt anything and may prevent bugs in the future.)
-						spssoDescriptor, spAssertionConsumerService := spssoDescriptor, spAssertionConsumerService
-
 						req.SPSSODescriptor = &spssoDescriptor
 						req.ACSEndpoint = &spAssertionConsumerService
 						return nil
@@ -515,14 +475,6 @@ func (req *IdpAuthnRequest) getACSEndpoint() error {
 			for _, spAssertionConsumerService := range spssoDescriptor.AssertionConsumerServices {
 				switch spAssertionConsumerService.Binding {
 				case HTTPPostBinding, HTTPRedirectBinding:
-					// explicitly copy loop iterator variables
-					//
-					// c.f. https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-					//
-					// (note that I'm pretty sure this isn't strictly necessary because we break out of the loop immediately,
-					// but it certainly doesn't hurt anything and may prevent bugs in the future.)
-					spssoDescriptor, spAssertionConsumerService := spssoDescriptor, spAssertionConsumerService
-
 					req.SPSSODescriptor = &spssoDescriptor
 					req.ACSEndpoint = &spAssertionConsumerService
 					return nil
@@ -547,28 +499,12 @@ func (DefaultAssertionMaker) MakeAssertion(req *IdpAuthnRequest, session *Sessio
 	var attributeConsumingService *AttributeConsumingService
 	for _, acs := range req.SPSSODescriptor.AttributeConsumingServices {
 		if acs.IsDefault != nil && *acs.IsDefault {
-			// explicitly copy loop iterator variables
-			//
-			// c.f. https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-			//
-			// (note that I'm pretty sure this isn't strictly necessary because we break out of the loop immediately,
-			// but it certainly doesn't hurt anything and may prevent bugs in the future.)
-			acs := acs
-
 			attributeConsumingService = &acs
 			break
 		}
 	}
 	if attributeConsumingService == nil {
 		for _, acs := range req.SPSSODescriptor.AttributeConsumingServices {
-			// explicitly copy loop iterator variables
-			//
-			// c.f. https://github.com/golang/go/wiki/CommonMistakes#using-reference-to-loop-iterator-variable
-			//
-			// (note that I'm pretty sure this isn't strictly necessary because we break out of the loop immediately,
-			// but it certainly doesn't hurt anything and may prevent bugs in the future.)
-			acs := acs
-
 			attributeConsumingService = &acs
 			break
 		}
@@ -704,10 +640,6 @@ func (DefaultAssertionMaker) MakeAssertion(req *IdpAuthnRequest, session *Sessio
 				Value: session.UserScopedAffiliation,
 			}},
 		})
-	}
-
-	for _, ca := range session.CustomAttributes {
-		attributes = append(attributes, ca)
 	}
 
 	if len(session.Groups) != 0 {

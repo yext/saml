@@ -2,7 +2,6 @@ package saml
 
 import (
 	"crypto/rand"
-	"io"
 	"time"
 
 	dsig "github.com/russellhaering/goxmldsig"
@@ -23,8 +22,7 @@ var RandReader = rand.Reader
 
 func randomBytes(n int) []byte {
 	rv := make([]byte, n)
-
-	if _, err := io.ReadFull(RandReader, rv); err != nil {
+	if _, err := RandReader.Read(rv); err != nil {
 		panic(err)
 	}
 	return rv
